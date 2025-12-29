@@ -11,6 +11,7 @@ func TestColors(t *testing.T) {
 	colors := []lipgloss.AdaptiveColor{
 		PrimaryColor,
 		SuccessColor,
+		WarningColor,
 		ErrorColor,
 		MutedColor,
 	}
@@ -144,6 +145,7 @@ func TestAdaptiveColorValues(t *testing.T) {
 	}{
 		{"Primary", PrimaryColor},
 		{"Success", SuccessColor},
+		{"Warning", WarningColor},
 		{"Error", ErrorColor},
 		{"Muted", MutedColor},
 	}

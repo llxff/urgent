@@ -15,6 +15,8 @@ type AccountInfo struct {
 	EnabledCount     int
 	TotalCount       int
 	EnabledCalendars []string // Names of enabled calendars
+	IsSelected       bool
+	IsFocused        bool
 }
 
 // AccountSelectorModel is a polished account selection screen.
@@ -30,6 +32,10 @@ type AccountSelectorModel struct {
 
 // NewAccountSelectorModel creates a new account selector.
 func NewAccountSelectorModel(accounts []AccountInfo) AccountSelectorModel {
+	if len(accounts) > 0 {
+		accounts[0].IsFocused = true
+	}
+
 	return AccountSelectorModel{
 		accounts:      accounts,
 		cursor:        0,
@@ -65,20 +71,32 @@ func (m AccountSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.moveCursorUp()
 			return m, nil
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
-			if m.cursor < len(m.accounts)-1 {
-				m.cursor++
-			}
+			m.moveCursorDown()
 			return m, nil
 		}
 	}
 
 	return m, nil
+}
+
+func (m *AccountSelectorModel) moveCursorUp() {
+	if m.cursor > 0 {
+		m.accounts[m.cursor].IsFocused = false
+		m.cursor--
+		m.accounts[m.cursor].IsFocused = true
+	}
+}
+
+func (m *AccountSelectorModel) moveCursorDown() {
+	if m.cursor < len(m.accounts)-1 {
+		m.accounts[m.cursor].IsFocused = false
+		m.cursor++
+		m.accounts[m.cursor].IsFocused = true
+	}
 }
 
 func (m AccountSelectorModel) View() string {
@@ -152,8 +170,7 @@ func (m AccountSelectorModel) renderAccountList(width int) string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		MarginBottom(1).
-		MarginTop(1).
-		MarginLeft(2) // Add consistent left padding
+		MarginTop(1)
 	b.WriteString(headerStyle.Render("Select an account to manage:"))
 	b.WriteString("\n\n")
 

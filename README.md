@@ -16,7 +16,7 @@ A powerful command-line interface for Google Calendar with a beautiful terminal 
 ### From Source
 
 ```bash
-git clone https://github.com/llxff/urgent.git
+git clone <repository-url>
 cd urgent
 task build
 sudo mv bin/urgent /usr/local/bin/
@@ -25,7 +25,7 @@ sudo mv bin/urgent /usr/local/bin/
 ### Using Go
 
 ```bash
-go install github.com/llxff/urgent@latest
+go install github.com/yourusername/urgent@latest
 ```
 
 ## Quick Start
@@ -63,7 +63,7 @@ A browser window will open for you to authorize the app. Once authorized, you'll
 urgent calendars
 
 # Select calendars for specific account
-urgent calendars --account user@gmail.com
+urgent calendars --account user@example.com
 
 # List all calendars and their enabled/disabled status
 urgent calendars --list
@@ -125,7 +125,7 @@ Manage calendar selection for your accounts.
 urgent calendars
 
 # Select calendars for specific account
-urgent calendars --account user@gmail.com
+urgent calendars --account user@example.com
 
 # List all calendars and their enabled/disabled status
 urgent calendars --list
@@ -133,10 +133,10 @@ urgent calendars --list
 
 **List Output:**
 ```
-user@gmail.com:
-  ✓ primary (user@gmail.com)
+user@example.com:
+  ✓ primary (user@example.com)
   ✓ work@group.calendar.google.com (Work Calendar)
-    personal@gmail.com (Personal) [disabled]
+    personal@example.com (Personal) [disabled]
 ```
 
 You can change calendar selection at any time. Disabled calendars won't show events in `urgent today` or `urgent next`.
@@ -251,10 +251,11 @@ Calendar selections are stored in:
 **Example config:**
 ```yaml
 accounts:
-  user@gmail.com:
+  user@example.com:
+    email: user@example.com
     enabled_calendars:
       - id: primary
-        name: user@gmail.com
+        name: user@example.com
       - id: work@group.calendar.google.com
         name: Work Calendar
 ```
@@ -374,7 +375,7 @@ Contributions are welcome! Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) f
 
 ## License
 
-MIT License
+[Your License Here]
 
 ## Acknowledgments
 
@@ -384,10 +385,10 @@ MIT License
 
 ## Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/llxff/urgent/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/llxff/urgent/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](your-repo-url/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](your-repo-url/discussions)
 - 📖 **Documentation**: [docs/](docs/)
 
 ---
 
-Made with ❤️ and ☕
+Made with ❤️ and ☕ by [Your Name]

@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"urgent/internal/auth"
 	"urgent/internal/calendar"
@@ -534,6 +535,7 @@ type calendarManagerModel struct {
 	err              error
 	width            int
 	height           int
+	savingStartTime  time.Time
 }
 
 func initialCalendarManagerModel(email string, store auth.Store) calendarManagerModel {
@@ -576,6 +578,7 @@ func (m calendarManagerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.calendarSelector.IsConfirmed() {
 				m.stage = calendarManagerSaving
+				m.savingStartTime = time.Now()
 
 				return m, m.saveConfigCmd()
 			}

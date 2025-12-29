@@ -11,22 +11,25 @@ import (
 
 // CalendarItem represents a calendar in the selection list.
 type CalendarItem struct {
-	ID      string
-	Name    string
-	Desc    string // Calendar description (field named Desc to avoid conflict with Description() method)
-	Primary bool
+	ID       string
+	Name     string
+	Desc     string // Calendar description (field named Desc to avoid conflict with Description() method)
+	Primary  bool
+	Selected bool
 }
 
 // CalendarSelectorModel manages the calendar selection TUI with polished UI.
 type CalendarSelectorModel struct {
-	email     string
-	items     []CalendarItem
-	selected  map[string]bool
-	cursor    int
-	confirmed bool
-	cancelled bool
-	width     int
-	height    int
+	email                 string
+	items                 []CalendarItem
+	selected              map[string]bool
+	cursor                int
+	confirmed             bool
+	cancelled             bool
+	width                 int
+	height                int
+	showSavedConfirmation bool
+	savedMessage          string
 }
 
 // NewCalendarSelectorModel creates a new calendar selector with polished UI.
@@ -37,9 +40,16 @@ func NewCalendarSelectorModel(email string, calendars []CalendarItem, enabledIDs
 		selected[id] = true
 	}
 
+	// Mark items as selected
+	items := make([]CalendarItem, len(calendars))
+	for i, cal := range calendars {
+		cal.Selected = selected[cal.ID]
+		items[i] = cal
+	}
+
 	return CalendarSelectorModel{
 		email:    email,
-		items:    calendars,
+		items:    items,
 		selected: selected,
 		cursor:   0,
 	}
@@ -68,18 +78,16 @@ func (m CalendarSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
 			m.confirmed = true
+			m.showSavedConfirmation = true
+			m.savedMessage = "Saved"
 			return m, tea.Quit
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.moveCursorUp()
 			return m, nil
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
-			if m.cursor < len(m.items)-1 {
-				m.cursor++
-			}
+			m.moveCursorDown()
 			return m, nil
 
 		case key.Matches(msg, key.NewBinding(key.WithKeys(" "))):
@@ -99,22 +107,37 @@ func (m CalendarSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *CalendarSelectorModel) moveCursorUp() {
+	if m.cursor > 0 {
+		m.cursor--
+	}
+}
+
+func (m *CalendarSelectorModel) moveCursorDown() {
+	if m.cursor < len(m.items)-1 {
+		m.cursor++
+	}
+}
+
 func (m *CalendarSelectorModel) toggleCurrent() {
 	if m.cursor >= 0 && m.cursor < len(m.items) {
 		item := &m.items[m.cursor]
 		m.selected[item.ID] = !m.selected[item.ID]
+		item.Selected = m.selected[item.ID]
 	}
 }
 
 func (m *CalendarSelectorModel) selectAll() {
 	for i := range m.items {
 		m.selected[m.items[i].ID] = true
+		m.items[i].Selected = true
 	}
 }
 
 func (m *CalendarSelectorModel) selectNone() {
 	for i := range m.items {
 		m.selected[m.items[i].ID] = false
+		m.items[i].Selected = false
 	}
 }
 
@@ -127,7 +150,7 @@ func (m CalendarSelectorModel) View() string {
 	breadcrumb := fmt.Sprintf("Accounts › %s › Calendars", TruncateWithEllipsis(m.email, 30))
 
 	// Top bar
-	topBar := RenderTopBar(m.width, "", breadcrumb)
+	topBar := RenderTopBar(m.width, "Urgent Calendars", breadcrumb)
 
 	// Content
 	content := m.renderContent()
@@ -142,7 +165,12 @@ func (m CalendarSelectorModel) View() string {
 		"esc":   "back",
 	}
 
-	footer := RenderFooter(m.width, FormatHelpKeys(helpKeys), "")
+	status := ""
+	if m.showSavedConfirmation {
+		status = ConfirmationMessage(m.savedMessage)
+	}
+
+	footer := RenderFooter(m.width, FormatHelpKeys(helpKeys), status)
 
 	frame := NewFrame(m.width, m.height)
 	return frame.Render(topBar, content, footer)
@@ -160,17 +188,11 @@ func (m CalendarSelectorModel) renderContent() string {
 	var b strings.Builder
 
 	// Summary header
-	selectedCount := 0
-	for _, sel := range m.selected {
-		if sel {
-			selectedCount++
-		}
-	}
+	selectedCount := m.countSelected()
 	summaryStyle := lipgloss.NewStyle().
 		Foreground(MutedColor).
 		MarginTop(1).
-		MarginBottom(1).
-		MarginLeft(2) // Add consistent left padding
+		MarginBottom(1)
 
 	b.WriteString(summaryStyle.Render(fmt.Sprintf(
 		"Account: %s  •  Enabled: %d / %d",
@@ -193,8 +215,7 @@ func (m CalendarSelectorModel) renderContent() string {
 	if visibleEnd < len(m.items) {
 		indicator := lipgloss.NewStyle().
 			Foreground(MutedColor).
-			MarginLeft(2). // Add consistent left padding
-			Render(fmt.Sprintf("... %d more", len(m.items)-visibleEnd))
+			Render(fmt.Sprintf("   ... %d more", len(m.items)-visibleEnd))
 		b.WriteString(indicator)
 		b.WriteString("\n")
 	}
@@ -234,12 +255,12 @@ func (m CalendarSelectorModel) calculateVisibleRange() (int, int) {
 func (m CalendarSelectorModel) renderCalendarItem(item CalendarItem, isFocused bool, width int) string {
 	// Checkbox
 	checkbox := "[ ]"
-	if m.selected[item.ID] {
+	if item.Selected {
 		checkbox = "[✓]"
 	}
 
 	checkboxStyle := lipgloss.NewStyle()
-	if m.selected[item.ID] {
+	if item.Selected {
 		checkboxStyle = checkboxStyle.Foreground(SuccessColor).Bold(true)
 	} else {
 		checkboxStyle = checkboxStyle.Foreground(MutedColor)
@@ -279,6 +300,16 @@ func (m CalendarSelectorModel) renderCalendarItem(item CalendarItem, isFocused b
 	}
 
 	return lineStyle.Render(content)
+}
+
+func (m CalendarSelectorModel) countSelected() int {
+	count := 0
+	for _, sel := range m.selected {
+		if sel {
+			count++
+		}
+	}
+	return count
 }
 
 // GetSelectedIDs returns the IDs of selected calendars.

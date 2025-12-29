@@ -74,22 +74,13 @@ func RenderTopBar(width int, title string, breadcrumb string) string {
 	titleStyle := lipgloss.NewStyle().Bold(true)
 	breadcrumbStyle := BreadcrumbStyle()
 
-	var content string
-
-	// If we have both title and breadcrumb, show: "Title › Breadcrumb"
-	if title != "" && breadcrumb != "" {
-		titleText := titleStyle.Render(title)
-		breadcrumbText := breadcrumbStyle.Render("›") + " " + breadcrumbStyle.Render(breadcrumb)
-		content = titleText + " " + breadcrumbText
-	} else if title != "" {
-		// Just title
-		content = titleStyle.Render(title)
-	} else if breadcrumb != "" {
-		// Just breadcrumb (bold it since it's the main navigation)
-		content = titleStyle.Render(breadcrumb)
+	titleText := titleStyle.Render(title)
+	breadcrumbText := ""
+	if breadcrumb != "" {
+		breadcrumbText = " " + breadcrumbStyle.Render("›") + " " + breadcrumbStyle.Render(breadcrumb)
 	}
 
-	bar := TopBarStyle(width).Render(content)
+	bar := TopBarStyle(width).Render(titleText + breadcrumbText)
 	return bar
 }
 
@@ -255,6 +246,15 @@ func TruncateWithEllipsis(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// PadRight pads a string to width with spaces on the right.
+func PadRight(s string, width int) string {
+	currentWidth := lipgloss.Width(s)
+	if currentWidth >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-currentWidth)
 }
 
 // FormatCount formats a count ratio (e.g., "3 of 12").

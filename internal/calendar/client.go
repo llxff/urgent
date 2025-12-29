@@ -134,6 +134,7 @@ func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time, cale
 			TimeMin(timeMin.Format(time.RFC3339)).
 			TimeMax(timeMax.Format(time.RFC3339)).
 			SingleEvents(true).
+			EventTypes("default").
 			OrderBy("startTime").
 			Do()
 		if err != nil {

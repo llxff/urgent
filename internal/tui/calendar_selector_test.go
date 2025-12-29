@@ -19,6 +19,9 @@ func TestNewCalendarSelectorModel(t *testing.T) {
 	m := NewCalendarSelectorModel("test@example.com", calendars, enabledIDs)
 
 	assert.Len(t, m.items, 3)
+	assert.True(t, m.items[0].Selected, "cal1 should be selected")
+	assert.False(t, m.items[1].Selected, "cal2 should not be selected")
+	assert.True(t, m.items[2].Selected, "cal3 should be selected")
 	assert.True(t, m.selected["cal1"])
 	assert.False(t, m.selected["cal2"])
 	assert.True(t, m.selected["cal3"])
@@ -65,6 +68,9 @@ func TestCalendarSelectorModel_SelectAll(t *testing.T) {
 	assert.True(t, m.selected["cal1"])
 	assert.True(t, m.selected["cal2"])
 	assert.True(t, m.selected["cal3"])
+	assert.True(t, m.items[0].Selected)
+	assert.True(t, m.items[1].Selected)
+	assert.True(t, m.items[2].Selected)
 }
 
 func TestCalendarSelectorModel_SelectNone(t *testing.T) {
@@ -86,6 +92,9 @@ func TestCalendarSelectorModel_SelectNone(t *testing.T) {
 	assert.False(t, m.selected["cal1"])
 	assert.False(t, m.selected["cal2"])
 	assert.False(t, m.selected["cal3"])
+	assert.False(t, m.items[0].Selected)
+	assert.False(t, m.items[1].Selected)
+	assert.False(t, m.items[2].Selected)
 }
 
 func TestCalendarSelectorModel_Confirm(t *testing.T) {

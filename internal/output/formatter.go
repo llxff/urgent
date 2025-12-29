@@ -5,6 +5,16 @@ import (
 	"urgent/internal/calendar"
 )
 
+// OutputFormat represents the output format type.
+type OutputFormat string
+
+const (
+	// FormatTable is the default table format.
+	FormatTable OutputFormat = "table"
+	// FormatJSON is the JSON format.
+	FormatJSON OutputFormat = "json"
+)
+
 // Formatter defines the interface for output formatting.
 type Formatter interface {
 	FormatEvents(events []*calendar.Event, filter string) (string, error)

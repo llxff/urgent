@@ -18,6 +18,12 @@ var (
 		Dark:  "42",
 	}
 
+	// WarningColor is used for warnings.
+	WarningColor = lipgloss.AdaptiveColor{
+		Light: "214", // Yellow
+		Dark:  "214",
+	}
+
 	// ErrorColor is used for errors.
 	ErrorColor = lipgloss.AdaptiveColor{
 		Light: "160", // Red

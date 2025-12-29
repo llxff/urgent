@@ -3,13 +3,13 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 
 	"urgent/internal/auth"
 	"urgent/internal/tui"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
@@ -49,38 +49,48 @@ type disconnectModel struct {
 	stage    disconnectStage
 	accounts []string
 	selected string
-	cursor   int
-	width    int
-	height   int
+	list     list.Model
 	err      error
 }
 
-func initialDisconnectModel(accounts []string, preselected string) disconnectModel {
-	stage := disconnectSelecting
-	cursor := 0
+type accountItem string
 
-	// If account is preselected, find its index and go to confirming
-	if preselected != "" {
-		for i, acc := range accounts {
-			if acc == preselected {
-				cursor = i
-				break
-			}
-		}
-		stage = disconnectConfirming
+func (i accountItem) FilterValue() string { return string(i) }
+func (i accountItem) Title() string       { return string(i) }
+func (i accountItem) Description() string { return "" }
+
+func initialDisconnectModel(accounts []string, preselected string) disconnectModel {
+	items := make([]list.Item, len(accounts))
+	for i, acc := range accounts {
+		items[i] = accountItem(acc)
 	}
 
-	return disconnectModel{
-		stage:    stage,
+	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	l.Title = "Select Account to Disconnect"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.Styles.Title = lipgloss.NewStyle().
+		Foreground(tui.PrimaryColor).
+		Bold(true).
+		Padding(1, 0)
+
+	m := disconnectModel{
 		accounts: accounts,
 		selected: preselected,
-		cursor:   cursor,
+		list:     l,
 	}
+
+	if preselected != "" {
+		m.stage = disconnectConfirming
+	} else {
+		m.stage = disconnectSelecting
+	}
+
+	return m
 }
 
 func (m disconnectModel) Init() tea.Cmd {
-	if m.selected != "" && m.stage == disconnectConfirming {
-		m.stage = disconnectDeleting
+	if m.selected != "" {
 		return m.deleteAccount()
 	}
 
@@ -89,48 +99,41 @@ func (m disconnectModel) Init() tea.Cmd {
 
 func (m disconnectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		return m, nil
-
 	case tea.KeyMsg:
-		switch m.stage {
-		case disconnectSelecting:
-			switch msg.String() {
-			case "q", "esc":
+		switch msg.String() {
+		case "q", "esc":
+			if m.stage == disconnectSuccess || m.stage == disconnectError {
 				return m, tea.Quit
-			case "up", "k":
-				if m.cursor > 0 {
-					m.cursor--
-				}
-			case "down", "j":
-				if m.cursor < len(m.accounts)-1 {
-					m.cursor++
-				}
-			case "enter":
-				m.selected = m.accounts[m.cursor]
-				m.stage = disconnectConfirming
-				return m, nil
 			}
 
-		case disconnectConfirming:
-			switch msg.String() {
-			case "y", "enter":
-				m.stage = disconnectDeleting
+			if m.stage == disconnectSelecting {
+				return m, tea.Quit
+			}
+
+		case "enter":
+			if m.stage == disconnectSelecting {
+				if item, ok := m.list.SelectedItem().(accountItem); ok {
+					m.selected = string(item)
+					m.stage = disconnectConfirming
+
+					return m, m.deleteAccount()
+				}
+			}
+
+		case "y":
+			if m.stage == disconnectConfirming {
 				return m, m.deleteAccount()
-			case "n", "esc":
-				// Go back to selection
-				m.selected = ""
-				m.stage = disconnectSelecting
-				return m, nil
 			}
 
-		case disconnectSuccess, disconnectError:
-			if msg.String() == "q" || msg.String() == "enter" {
+		case "n":
+			if m.stage == disconnectConfirming {
 				return m, tea.Quit
 			}
 		}
+
+	case tea.WindowSizeMsg:
+		h, v := lipgloss.NewStyle().GetFrameSize()
+		m.list.SetSize(msg.Width-h, msg.Height-v)
 
 	case deleteCompleteMsg:
 		if msg.err != nil {
@@ -139,10 +142,16 @@ func (m disconnectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.stage = disconnectSuccess
 		}
-		return m, nil
+
+		return m, tea.Quit
 	}
 
-	return m, nil
+	var cmd tea.Cmd
+	if m.stage == disconnectSelecting {
+		m.list, cmd = m.list.Update(msg)
+	}
+
+	return m, cmd
 }
 
 type deleteCompleteMsg struct {
@@ -159,189 +168,53 @@ func (m disconnectModel) deleteAccount() tea.Cmd {
 }
 
 func (m disconnectModel) View() string {
-	if m.width == 0 {
-		return tui.LoadingSpinner() + " Initializing..."
-	}
+	var b strings.Builder
 
 	switch m.stage {
 	case disconnectSelecting:
-		return m.renderSelectionScreen()
+		return m.list.View()
+
 	case disconnectConfirming:
-		return m.renderConfirmationScreen()
+		title := tui.TitleStyle().Render("Confirm Disconnect")
+		b.WriteString(title + "\n\n")
+
+		box := tui.BoxStyle().Render(
+			fmt.Sprintf("Disconnect account: %s?\n\n"+
+				"This will remove all stored credentials.", m.selected),
+		)
+		b.WriteString(box + "\n\n")
+
+		help := tui.HelpStyle().Render("y = yes • n = no")
+		b.WriteString(help)
+
 	case disconnectDeleting:
-		return m.renderDeletingScreen()
+		title := tui.TitleStyle().Render("Disconnecting...")
+		b.WriteString(title + "\n")
+
 	case disconnectSuccess:
-		return m.renderSuccessScreen()
+		title := tui.SuccessStyle().Render("✓ Account Disconnected")
+		b.WriteString(title + "\n\n")
+
+		box := tui.BoxStyle().Render(
+			fmt.Sprintf("Account %s has been removed.\n"+
+				"Credentials deleted from Keychain.", m.selected),
+		)
+		b.WriteString(box + "\n")
+
 	case disconnectError:
-		return m.renderErrorScreen()
+		title := tui.ErrorStyle().Render("✗ Disconnect Failed")
+		b.WriteString(title + "\n\n")
+
+		errorMsg := tui.BoxStyle().Render(
+			fmt.Sprintf("Error: %v", m.err),
+		)
+		b.WriteString(errorMsg + "\n\n")
+
+		help := tui.HelpStyle().Render("Press q to exit")
+		b.WriteString(help)
 	}
 
-	return ""
-}
-
-func (m disconnectModel) renderSelectionScreen() string {
-	topBar := tui.RenderTopBar(m.width, "", "Disconnect")
-
-	// Content
-	var b strings.Builder
-
-	// Header
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		MarginBottom(1).
-		MarginTop(1).
-		MarginLeft(2)
-	b.WriteString(headerStyle.Render("Select an account to disconnect:"))
-	b.WriteString("\n\n")
-
-	// Account list
-	for i, acc := range m.accounts {
-		item := m.renderAccountItem(acc, i == m.cursor)
-		b.WriteString(item)
-		b.WriteString("\n")
-	}
-
-	content := b.String()
-
-	// Footer
-	helpKeys := map[string]string{
-		"enter": "select",
-		"↑↓":    "navigate",
-		"esc":   "cancel",
-	}
-	footer := tui.RenderFooter(m.width, tui.FormatHelpKeys(helpKeys), "")
-
-	frame := tui.NewFrame(m.width, m.height)
-	return frame.Render(topBar, content, footer)
-}
-
-func (m disconnectModel) renderAccountItem(email string, isFocused bool) string {
-	width := m.width - 8
-
-	// Styles
-	var itemStyle lipgloss.Style
-	if isFocused {
-		itemStyle = lipgloss.NewStyle().
-			Background(lipgloss.AdaptiveColor{Light: "254", Dark: "235"}).
-			Foreground(lipgloss.AdaptiveColor{Light: "16", Dark: "255"}).
-			Padding(0, 2).
-			Width(width).
-			Bold(true)
-	} else {
-		itemStyle = lipgloss.NewStyle().
-			Padding(0, 2).
-			Width(width)
-	}
-
-	cursor := "  "
-	if isFocused {
-		cursor = "❯ "
-	}
-
-	return itemStyle.Render(cursor + email)
-}
-
-func (m disconnectModel) renderConfirmationScreen() string {
-	topBar := tui.RenderTopBar(m.width, "", "Disconnect › Confirm")
-
-	var b strings.Builder
-
-	// Header
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		MarginBottom(1).
-		MarginTop(1).
-		MarginLeft(2)
-	b.WriteString(headerStyle.Render("Confirm Disconnect"))
-	b.WriteString("\n\n")
-
-	// Warning box
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tui.ErrorColor).
-		Padding(1, 2).
-		MarginLeft(2).
-		Width(m.width - 8)
-
-	message := fmt.Sprintf("Disconnect account: %s?\n\nThis will remove all stored credentials from Keychain.", m.selected)
-	b.WriteString(boxStyle.Render(message))
-
-	content := b.String()
-
-	helpKeys := map[string]string{
-		"y":   "yes",
-		"n":   "no",
-		"esc": "back",
-	}
-	footer := tui.RenderFooter(m.width, tui.FormatHelpKeys(helpKeys), "")
-
-	frame := tui.NewFrame(m.width, m.height)
-	return frame.Render(topBar, content, footer)
-}
-
-func (m disconnectModel) renderDeletingScreen() string {
-	topBar := tui.RenderTopBar(m.width, "", "Disconnect")
-
-	content := tui.CenterVertical(
-		tui.StatusIndicator(tui.LoadingSpinner(), "Disconnecting account...", tui.PrimaryColor),
-		m.height-4,
-	)
-
-	footer := tui.RenderFooter(m.width, "", "")
-
-	frame := tui.NewFrame(m.width, m.height)
-	return frame.Render(topBar, content, footer)
-}
-
-func (m disconnectModel) renderSuccessScreen() string {
-	topBar := tui.RenderTopBar(m.width, "", "Disconnect")
-
-	var b strings.Builder
-
-	// Status with margin
-	statusStyle := lipgloss.NewStyle().MarginTop(1).MarginLeft(2)
-	b.WriteString(statusStyle.Render(tui.StatusIndicator("✓", "Account Disconnected", tui.SuccessColor)))
-	b.WriteString("\n\n")
-
-	summaryStyle := lipgloss.NewStyle().Foreground(tui.MutedColor).MarginLeft(2)
-	b.WriteString(summaryStyle.Render(fmt.Sprintf(
-		"Account: %s\nCredentials deleted from Keychain",
-		m.selected,
-	)))
-
-	content := b.String()
-
-	helpKeys := map[string]string{
-		"q": "quit",
-	}
-	footer := tui.RenderFooter(m.width, tui.FormatHelpKeys(helpKeys), "")
-
-	frame := tui.NewFrame(m.width, m.height)
-	return frame.Render(topBar, content, footer)
-}
-
-func (m disconnectModel) renderErrorScreen() string {
-	topBar := tui.RenderTopBar(m.width, "", "Disconnect")
-
-	var b strings.Builder
-
-	// Status with margin
-	statusStyle := lipgloss.NewStyle().MarginTop(1).MarginLeft(2)
-	b.WriteString(statusStyle.Render(tui.StatusIndicator("✗", "Disconnect Failed", tui.ErrorColor)))
-	b.WriteString("\n\n")
-
-	errorStyle := lipgloss.NewStyle().Foreground(tui.ErrorColor).MarginLeft(2)
-	b.WriteString(errorStyle.Render(fmt.Sprintf("Error: %v", m.err)))
-
-	content := b.String()
-
-	helpKeys := map[string]string{
-		"q": "quit",
-	}
-	footer := tui.RenderFooter(m.width, tui.FormatHelpKeys(helpKeys), "")
-
-	frame := tui.NewFrame(m.width, m.height)
-	return frame.Render(topBar, content, footer)
+	return b.String()
 }
 
 func runDisconnect(_ *cobra.Command, _ []string) error {
@@ -367,12 +240,7 @@ func runDisconnect(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	p := tea.NewProgram(
-		initialDisconnectModel(accounts, disconnectAccount),
-		tea.WithInput(os.Stdin),
-		tea.WithOutput(os.Stderr),
-		tea.WithAltScreen(),
-	)
+	p := tea.NewProgram(initialDisconnectModel(accounts, disconnectAccount))
 
 	finalModel, err := p.Run()
 	if err != nil {

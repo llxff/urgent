@@ -1,0 +1,12 @@
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags: []
+
+linters:
+  enable-all: true
+  disable:
+    # Deprecated linters
+    - wsl  # Use wsl_v5 instead

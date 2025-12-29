@@ -1,0 +1,20 @@
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test and coverage files
+coverage.out
+coverage.html
+*.test
+
+# Dependencies
+vendor/
+go.sum
+
+# Large generated files
+*.pb.go
+
+.history/

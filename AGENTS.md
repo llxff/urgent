@@ -75,11 +75,9 @@ type Formatter interface {
 ## Commands
 
 1. **`urgent setup`** - Store OAuth credentials in Keychain (one-time)
-2. **`urgent connect`** - Connect Google account + select calendars (TUI flow)
-3. **`urgent calendars`** - Manage calendar selection per account
-4. **`urgent today`** - Show today's events from enabled calendars (TUI table or JSON)
-5. **`urgent next --within N`** - Show next event within N minutes (TUI or JSON)
-6. **`urgent disconnect`** - Disconnect account (TUI selection)
+2. **`urgent calendars`** - Unified account and calendar management (add/remove accounts, select calendars)
+3. **`urgent today`** - Show today's events from enabled calendars (TUI table or JSON)
+4. **`urgent next --within N`** - Show next event within N minutes (TUI or JSON)
 
 ## Testing Strategy
 

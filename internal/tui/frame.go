@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -19,22 +20,35 @@ func NewFrame(width, height int) Frame {
 }
 
 // Render renders the frame with the given components.
+// Footer is pinned to the bottom of the screen.
 func (f Frame) Render(topBar, content, footer string) string {
 	if f.width == 0 || f.height == 0 {
 		return content
 	}
 
-	var b strings.Builder
+	// Calculate heights
+	topBarHeight := lipgloss.Height(topBar)
+	footerHeight := lipgloss.Height(footer)
+	contentHeight := f.height - topBarHeight - footerHeight - 2 // -2 for newlines
 
-	// Top bar
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	// Place content in available space (top-aligned)
+	placedContent := lipgloss.Place(
+		f.width,
+		contentHeight,
+		lipgloss.Left,
+		lipgloss.Top,
+		content,
+	)
+
+	var b strings.Builder
 	b.WriteString(topBar)
 	b.WriteString("\n")
-
-	// Content (fill remaining height)
-	b.WriteString(content)
+	b.WriteString(placedContent)
 	b.WriteString("\n")
-
-	// Footer
 	b.WriteString(footer)
 
 	return b.String()
@@ -109,6 +123,8 @@ func RenderFooter(width int, helpText string, status string) string {
 }
 
 // LoadingSpinner returns a simple loading indicator.
+// Note: For animated spinners, use bubbles/spinner component with Tick messages.
+// This static version is used for simple loading states where animation isn't needed.
 func LoadingSpinner() string {
 	return "⠋"
 }
@@ -154,8 +170,7 @@ func EmptyState(title, message, action string) string {
 func InfoPanel(title string, items []string) string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(PrimaryColor).
-		MarginBottom(1)
+		Foreground(PrimaryColor)
 
 	itemStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "240", Dark: "250"})
@@ -172,7 +187,7 @@ func InfoPanel(title string, items []string) string {
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.AdaptiveColor{Light: "250", Dark: "235"}).
-		Padding(1, 2).
+		Padding(0, 2).
 		Render(b.String())
 }
 
@@ -187,8 +202,8 @@ func ConfirmationMessage(message string) string {
 // FormatHelpKeys formats a list of help key bindings.
 func FormatHelpKeys(bindings map[string]string) string {
 	var parts []string
-	// Order: most important first
-	order := []string{"enter", "space", "a", "n", "esc", "q"}
+	// Order: most important first, comprehensive list for consistent ordering
+	order := []string{"enter", "space", "a", "d", "y", "n", "↑↓", "j/k", "esc", "q"}
 
 	for _, key := range order {
 		if desc, ok := bindings[key]; ok {
@@ -198,8 +213,9 @@ func FormatHelpKeys(bindings map[string]string) string {
 		}
 	}
 
-	// Add any remaining keys not in order
-	for key, desc := range bindings {
+	// Collect remaining keys not in order
+	var remaining []string
+	for key := range bindings {
 		found := false
 		for _, k := range order {
 			if k == key {
@@ -208,10 +224,19 @@ func FormatHelpKeys(bindings map[string]string) string {
 			}
 		}
 		if !found {
-			keyStyle := lipgloss.NewStyle().Foreground(MutedColor)
-			descStyle := lipgloss.NewStyle().Foreground(MutedColor)
-			parts = append(parts, keyStyle.Render(key)+" "+descStyle.Render(desc))
+			remaining = append(remaining, key)
 		}
+	}
+
+	// Sort remaining keys for deterministic output
+	sort.Strings(remaining)
+
+	// Add sorted remaining keys
+	for _, key := range remaining {
+		desc := bindings[key]
+		keyStyle := lipgloss.NewStyle().Foreground(MutedColor)
+		descStyle := lipgloss.NewStyle().Foreground(MutedColor)
+		parts = append(parts, keyStyle.Render(key)+" "+descStyle.Render(desc))
 	}
 
 	return strings.Join(parts, "  •  ")
@@ -237,15 +262,33 @@ func CenterVertical(content string, height int) string {
 	return b.String()
 }
 
-// TruncateWithEllipsis truncates a string to maxLen with ellipsis if needed.
+// TruncateWithEllipsis truncates a string to maxLen display width with ellipsis if needed.
+// Uses lipgloss.Width for proper Unicode/emoji handling.
 func TruncateWithEllipsis(s string, maxLen int) string {
-	if len(s) <= maxLen {
+	if lipgloss.Width(s) <= maxLen {
 		return s
 	}
 	if maxLen <= 3 {
-		return s[:maxLen]
+		// Just truncate by runes when too short for ellipsis
+		runes := []rune(s)
+		if len(runes) <= maxLen {
+			return s
+		}
+		return string(runes[:maxLen])
 	}
-	return s[:maxLen-3] + "..."
+	// Truncate to fit ellipsis within maxLen
+	targetWidth := maxLen - 3 // Reserve space for "..."
+	result := ""
+	currentWidth := 0
+	for _, r := range s {
+		runeWidth := lipgloss.Width(string(r))
+		if currentWidth+runeWidth > targetWidth {
+			break
+		}
+		result += string(r)
+		currentWidth += runeWidth
+	}
+	return result + "..."
 }
 
 // PadRight pads a string to width with spaces on the right.
@@ -260,4 +303,20 @@ func PadRight(s string, width int) string {
 // FormatCount formats a count ratio (e.g., "3 of 12").
 func FormatCount(current, total int) string {
 	return fmt.Sprintf("%d of %d", current, total)
+}
+
+// RenderStatusScreen renders a centered status screen with icon, message, and optional help keys.
+// This is a common pattern for loading, error, and success screens.
+func RenderStatusScreen(width, height int, title, breadcrumb, icon, message string, color lipgloss.AdaptiveColor, helpText, status string) string {
+	topBar := RenderTopBar(width, title, breadcrumb)
+
+	content := CenterVertical(
+		StatusIndicator(icon, message, color),
+		height-4,
+	)
+
+	footer := RenderFooter(width, helpText, status)
+
+	frame := NewFrame(width, height)
+	return frame.Render(topBar, content, footer)
 }

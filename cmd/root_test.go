@@ -73,8 +73,7 @@ func TestSubcommandsRegistered(t *testing.T) {
 	// Test that all expected subcommands are registered
 	expectedCommands := []string{
 		"setup",
-		"connect",
-		"disconnect",
+		"calendars",
 		"today",
 		"next",
 	}
@@ -111,8 +110,7 @@ func TestCommandDescriptions(t *testing.T) {
 		commandName string
 	}{
 		{"setup", "setup"},
-		{"connect", "connect"},
-		{"disconnect", "disconnect"},
+		{"calendars", "calendars"},
 		{"today", "today"},
 		{"next", "next"},
 	}
@@ -211,11 +209,11 @@ func TestNextCommandFlags(t *testing.T) {
 	}
 }
 
-func TestDisconnectCommandFlags(t *testing.T) {
+func TestCalendarsCommandFlags(t *testing.T) {
 	var cmd *cobra.Command
 
 	for _, c := range rootCmd.Commands() {
-		if c.Name() == "disconnect" {
+		if c.Name() == "calendars" {
 			cmd = c
 
 			break
@@ -223,19 +221,31 @@ func TestDisconnectCommandFlags(t *testing.T) {
 	}
 
 	if cmd == nil {
-		t.Fatal("disconnect command not found")
+		t.Fatal("calendars command not found")
 	}
 
 	// Test --account flag
 	flag := cmd.Flags().Lookup("account")
 	if flag == nil {
-		t.Error("Expected --account flag on disconnect command")
+		t.Error("Expected --account flag on calendars command")
 
 		return
 	}
 
 	if flag.Shorthand != "a" {
 		t.Errorf("Expected shorthand 'a', got '%s'", flag.Shorthand)
+	}
+
+	// Test --list flag
+	listFlag := cmd.Flags().Lookup("list")
+	if listFlag == nil {
+		t.Error("Expected --list flag on calendars command")
+
+		return
+	}
+
+	if listFlag.Shorthand != "l" {
+		t.Errorf("Expected shorthand 'l', got '%s'", listFlag.Shorthand)
 	}
 }
 

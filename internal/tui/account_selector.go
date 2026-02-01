@@ -4,9 +4,81 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+)
+
+// accountSelectorKeyMap defines key bindings for the account selector.
+type accountSelectorKeyMap struct {
+	Up     key.Binding
+	Down   key.Binding
+	Select key.Binding
+	Add    key.Binding
+	Delete key.Binding
+	Quit   key.Binding
+	Cancel key.Binding
+}
+
+// defaultAccountSelectorKeys returns the default key bindings.
+func defaultAccountSelectorKeys() accountSelectorKeyMap {
+	return accountSelectorKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "down"),
+		),
+		Select: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "select"),
+		),
+		Add: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "add"),
+		),
+		Delete: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "delete"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q", "ctrl+c"),
+			key.WithHelp("q", "quit"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
+		),
+	}
+}
+
+// ShortHelp returns key bindings for the short help view.
+func (k accountSelectorKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Select, k.Add, k.Delete, k.Up, k.Down, k.Cancel}
+}
+
+// FullHelp returns key bindings for the full help view.
+func (k accountSelectorKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down},
+		{k.Select, k.Add, k.Delete},
+		{k.Cancel, k.Quit},
+	}
+}
+
+// Layout constants for AccountSelector.
+const (
+	// MinWidthForInfoPanel is the minimum screen width to show the side info panel.
+	MinWidthForInfoPanel = 100
+	// InfoPanelWidthPercent is the percentage of screen width for the info panel.
+	InfoPanelWidthPercent = 40
+	// MinInfoPanelWidth is the minimum width of the info panel in characters.
+	MinInfoPanelWidth = 35
+	// MaxInfoPanelWidth is the maximum width of the info panel in characters.
+	MaxInfoPanelWidth = 50
 )
 
 // AccountInfo holds information about a calendar account.
@@ -16,7 +88,6 @@ type AccountInfo struct {
 	TotalCount       int
 	EnabledCalendars []string // Names of enabled calendars
 	IsSelected       bool
-	IsFocused        bool
 }
 
 // AccountSelectorModel is a polished account selection screen.
@@ -28,18 +99,25 @@ type AccountSelectorModel struct {
 	confirmed     bool
 	cancelled     bool
 	showInfoPanel bool
+	keys          accountSelectorKeyMap
+	help          help.Model
 }
 
 // NewAccountSelectorModel creates a new account selector.
 func NewAccountSelectorModel(accounts []AccountInfo) AccountSelectorModel {
-	if len(accounts) > 0 {
-		accounts[0].IsFocused = true
-	}
+	// Make a copy to avoid mutating the caller's slice
+	accountsCopy := make([]AccountInfo, len(accounts))
+	copy(accountsCopy, accounts)
+
+	h := help.New()
+	h.ShowAll = false // Use short help by default
 
 	return AccountSelectorModel{
-		accounts:      accounts,
+		accounts:      accountsCopy,
 		cursor:        0,
 		showInfoPanel: true,
+		keys:          defaultAccountSelectorKeys(),
+		help:          h,
 	}
 }
 
@@ -53,29 +131,41 @@ func (m AccountSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		// Show info panel on wide screens
-		m.showInfoPanel = msg.Width > 100
+		m.showInfoPanel = msg.Width > MinWidthForInfoPanel
+		// Update help model width
+		m.help.Width = msg.Width
 		return m, nil
 
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "ctrl+c"))):
+		case key.Matches(msg, m.keys.Quit):
 			m.cancelled = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
+		case key.Matches(msg, m.keys.Cancel):
 			m.cancelled = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		case key.Matches(msg, m.keys.Select):
 			m.confirmed = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
+		case key.Matches(msg, m.keys.Up):
 			m.moveCursorUp()
 			return m, nil
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
+		case key.Matches(msg, m.keys.Down):
 			m.moveCursorDown()
+			return m, nil
+
+		case key.Matches(msg, m.keys.Add):
+			return m, func() tea.Msg { return AddAccountRequestMsg{} }
+
+		case key.Matches(msg, m.keys.Delete):
+			if len(m.accounts) > 0 {
+				email := m.accounts[m.cursor].Email
+				return m, func() tea.Msg { return DeleteAccountRequestMsg{Email: NewEmail(email)} }
+			}
 			return m, nil
 		}
 	}
@@ -85,17 +175,13 @@ func (m AccountSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *AccountSelectorModel) moveCursorUp() {
 	if m.cursor > 0 {
-		m.accounts[m.cursor].IsFocused = false
 		m.cursor--
-		m.accounts[m.cursor].IsFocused = true
 	}
 }
 
 func (m *AccountSelectorModel) moveCursorDown() {
 	if m.cursor < len(m.accounts)-1 {
-		m.accounts[m.cursor].IsFocused = false
 		m.cursor++
-		m.accounts[m.cursor].IsFocused = true
 	}
 }
 
@@ -105,51 +191,41 @@ func (m AccountSelectorModel) View() string {
 	}
 
 	// Top bar
-	topBar := RenderTopBar(m.width, "", "Accounts")
+	topBar := RenderTopBar(m.width, "", "")
 
 	// Content
 	content := m.renderContent()
 
-	// Footer
-	helpKeys := map[string]string{
-		"enter": "select",
-		"↑↓":    "navigate",
-		"esc":   "cancel",
-	}
-	footer := RenderFooter(m.width, FormatHelpKeys(helpKeys), "")
+	// Footer with help from bubbles/help component
+	footer := RenderFooter(m.width, m.help.View(m.keys), "")
 
 	frame := NewFrame(m.width, m.height)
 	return frame.Render(topBar, content, footer)
 }
 
 func (m AccountSelectorModel) renderContent() string {
-	// Calculate layout - use ~60/40 split on wide screens
-	mainWidth := m.width
+	// Calculate layout for side panel
 	var sideWidth int
 	if m.showInfoPanel {
-		// Allocate 40% to side panel, but min 35 and max 50
-		sideWidth = m.width * 40 / 100
-		if sideWidth < 35 {
-			sideWidth = 35
+		// Allocate percentage to side panel, with min/max bounds
+		sideWidth = m.width * InfoPanelWidthPercent / 100
+		if sideWidth < MinInfoPanelWidth {
+			sideWidth = MinInfoPanelWidth
 		}
-		if sideWidth > 50 {
-			sideWidth = 50
+		if sideWidth > MaxInfoPanelWidth {
+			sideWidth = MaxInfoPanelWidth
 		}
-		mainWidth = m.width - sideWidth - 4 // Leave space for padding and separation
 	}
 
-	// Render account list
-	accountList := m.renderAccountList(mainWidth)
+	// Render account list with reasonable width
+	listWidth := 50 // Fixed width for account list
+	accountList := m.renderAccountList(listWidth)
 
 	// Render info panel if space allows
 	if m.showInfoPanel && m.cursor < len(m.accounts) {
 		infoPanel := m.renderInfoPanel(sideWidth)
-		return lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			accountList,
-			strings.Repeat(" ", 2),
-			infoPanel,
-		)
+		// Join list and panel - both aligned at top
+		return lipgloss.JoinHorizontal(lipgloss.Top, accountList, "  ", infoPanel)
 	}
 
 	return accountList
@@ -160,21 +236,13 @@ func (m AccountSelectorModel) renderAccountList(width int) string {
 		return EmptyState(
 			"No Accounts Connected",
 			"You haven't connected any Google accounts yet.",
-			"Run 'urgent connect' to add an account",
+			"Press 'a' to add your first account",
 		)
 	}
 
 	var b strings.Builder
 
-	// Header
-	headerStyle := lipgloss.NewStyle().
-		Bold(true).
-		MarginBottom(1).
-		MarginTop(1)
-	b.WriteString(headerStyle.Render("Select an account to manage:"))
-	b.WriteString("\n\n")
-
-	// Account items
+	// Account items (no redundant header)
 	for i, acc := range m.accounts {
 		item := m.renderAccountItem(acc, i == m.cursor, width-4)
 		b.WriteString(item)

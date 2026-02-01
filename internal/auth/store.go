@@ -40,6 +40,13 @@ type Store interface {
 
 	// ListAccounts returns all email addresses with stored tokens.
 	ListAccounts() ([]string, error)
+
+	// GetOAuthCredentials retrieves OAuth client ID and secret.
+	// Returns an error if credentials are not configured.
+	GetOAuthCredentials() (clientID, clientSecret string, err error)
+
+	// SaveOAuthCredentials stores OAuth client ID and secret.
+	SaveOAuthCredentials(clientID, clientSecret string) error
 }
 
 // KeychainStore implements Store using macOS Keychain.
@@ -49,6 +56,9 @@ type KeychainStore struct{}
 func NewKeychainStore() *KeychainStore {
 	return &KeychainStore{}
 }
+
+// Verify KeychainStore implements Store at compile time.
+var _ Store = (*KeychainStore)(nil)
 
 // SaveToken stores an OAuth2 token in the Keychain.
 func (s *KeychainStore) SaveToken(email string, token *oauth2.Token) error {
@@ -216,7 +226,18 @@ func (s *KeychainStore) removeAccountFromList(email string) error {
 	return nil
 }
 
+// GetOAuthCredentials retrieves OAuth client ID and secret from Keychain.
+func (s *KeychainStore) GetOAuthCredentials() (clientID, clientSecret string, err error) {
+	return GetOAuthCredentials()
+}
+
 // SaveOAuthCredentials stores OAuth client ID and secret in Keychain.
+func (s *KeychainStore) SaveOAuthCredentials(clientID, clientSecret string) error {
+	return SaveOAuthCredentials(clientID, clientSecret)
+}
+
+// SaveOAuthCredentials stores OAuth client ID and secret in Keychain.
+// Deprecated: Use KeychainStore.SaveOAuthCredentials instead.
 func SaveOAuthCredentials(clientID, clientSecret string) error {
 	if clientID == "" || clientSecret == "" {
 		return errors.New("client ID and secret cannot be empty")

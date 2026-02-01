@@ -4,10 +4,84 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// calendarSelectorKeyMap defines key bindings for the calendar selector.
+type calendarSelectorKeyMap struct {
+	Up        key.Binding
+	Down      key.Binding
+	Toggle    key.Binding
+	SelectAll key.Binding
+	SelectNone key.Binding
+	Confirm   key.Binding
+	Cancel    key.Binding
+	Quit      key.Binding
+}
+
+// Layout constants for CalendarSelector.
+const (
+	// calendarReservedFrameHeight is the vertical space reserved for frame elements.
+	// Breakdown: top bar (2) + summary (3) + footer (2) = 7 lines.
+	calendarReservedFrameHeight = 7
+	// calendarMinVisibleItems is the minimum number of calendar items to show.
+	calendarMinVisibleItems = 5
+)
+
+// defaultCalendarSelectorKeys returns the default key bindings.
+func defaultCalendarSelectorKeys() calendarSelectorKeyMap {
+	return calendarSelectorKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "down"),
+		),
+		Toggle: key.NewBinding(
+			key.WithKeys(" "),
+			key.WithHelp("space", "toggle"),
+		),
+		SelectAll: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "all"),
+		),
+		SelectNone: key.NewBinding(
+			key.WithKeys("n"),
+			key.WithHelp("n", "none"),
+		),
+		Confirm: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "save"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "back"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q", "ctrl+c"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
+// ShortHelp returns key bindings for the short help view.
+func (k calendarSelectorKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Confirm, k.Toggle, k.SelectAll, k.SelectNone, k.Up, k.Down, k.Cancel}
+}
+
+// FullHelp returns key bindings for the full help view.
+func (k calendarSelectorKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down},
+		{k.Toggle, k.SelectAll, k.SelectNone},
+		{k.Confirm, k.Cancel, k.Quit},
+	}
+}
 
 // CalendarItem represents a calendar in the selection list.
 type CalendarItem struct {
@@ -30,6 +104,8 @@ type CalendarSelectorModel struct {
 	height                int
 	showSavedConfirmation bool
 	savedMessage          string
+	keys                  calendarSelectorKeyMap
+	help                  help.Model
 }
 
 // NewCalendarSelectorModel creates a new calendar selector with polished UI.
@@ -47,11 +123,16 @@ func NewCalendarSelectorModel(email string, calendars []CalendarItem, enabledIDs
 		items[i] = cal
 	}
 
+	h := help.New()
+	h.ShowAll = false // Use short help by default
+
 	return CalendarSelectorModel{
 		email:    email,
 		items:    items,
 		selected: selected,
 		cursor:   0,
+		keys:     defaultCalendarSelectorKeys(),
+		help:     h,
 	}
 }
 
@@ -64,41 +145,43 @@ func (m CalendarSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Update help model width
+		m.help.Width = msg.Width
 		return m, nil
 
 	case tea.KeyMsg:
 		switch {
-		case key.Matches(msg, key.NewBinding(key.WithKeys("q", "ctrl+c"))):
+		case key.Matches(msg, m.keys.Quit):
 			// q only works as quit if not in middle of action
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("esc"))):
+		case key.Matches(msg, m.keys.Cancel):
 			m.cancelled = true
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("enter"))):
+		case key.Matches(msg, m.keys.Confirm):
 			m.confirmed = true
 			m.showSavedConfirmation = true
 			m.savedMessage = "Saved"
 			return m, tea.Quit
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("up", "k"))):
+		case key.Matches(msg, m.keys.Up):
 			m.moveCursorUp()
 			return m, nil
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("down", "j"))):
+		case key.Matches(msg, m.keys.Down):
 			m.moveCursorDown()
 			return m, nil
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys(" "))):
+		case key.Matches(msg, m.keys.Toggle):
 			m.toggleCurrent()
 			return m, nil
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("a"))):
+		case key.Matches(msg, m.keys.SelectAll):
 			m.selectAll()
 			return m, nil
 
-		case key.Matches(msg, key.NewBinding(key.WithKeys("n"))):
+		case key.Matches(msg, m.keys.SelectNone):
 			m.selectNone()
 			return m, nil
 		}
@@ -155,22 +238,13 @@ func (m CalendarSelectorModel) View() string {
 	// Content
 	content := m.renderContent()
 
-	// Footer
-	helpKeys := map[string]string{
-		"enter": "save",
-		"space": "toggle",
-		"a":     "all",
-		"n":     "none",
-		"↑↓":    "navigate",
-		"esc":   "back",
-	}
-
+	// Footer with help from bubbles/help component
 	status := ""
 	if m.showSavedConfirmation {
 		status = ConfirmationMessage(m.savedMessage)
 	}
 
-	footer := RenderFooter(m.width, FormatHelpKeys(helpKeys), status)
+	footer := RenderFooter(m.width, m.help.View(m.keys), status)
 
 	frame := NewFrame(m.width, m.height)
 	return frame.Render(topBar, content, footer)
@@ -225,10 +299,9 @@ func (m CalendarSelectorModel) renderContent() string {
 
 func (m CalendarSelectorModel) calculateVisibleRange() (int, int) {
 	// Calculate how many items can fit
-	// Rough estimate: top bar (2) + summary (3) + footer (2) = 7 lines reserved
-	availableHeight := m.height - 7
-	if availableHeight < 5 {
-		availableHeight = 5
+	availableHeight := m.height - calendarReservedFrameHeight
+	if availableHeight < calendarMinVisibleItems {
+		availableHeight = calendarMinVisibleItems
 	}
 
 	maxVisible := availableHeight

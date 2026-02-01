@@ -149,18 +149,76 @@ Terminal UI components and styling.
 
 **Files:**
 - `styles.go` - Adaptive color palette and reusable styles
-- `table.go` - Event table component
-- `list.go` - Account selection list
-- `spinner.go` - Loading spinner
-- `confirm.go` - Confirmation dialog
-- `status.go` - Success/error status screens
-- `input.go` - Text input with validation
+- `frame.go` - Frame system (TopBar, Footer, layout helpers)
+- `account_selector.go` - Account list with info panel
+- `calendar_selector.go` - Calendar multi-select with checkboxes
+- `modal.go` - Centered overlay for confirmations and waiting states
 
 **Key Design Decisions:**
 - Adaptive colors using `lipgloss.AdaptiveColor` and `termenv`
 - State machine pattern for multi-screen flows
 - Keyboard navigation follows standard conventions
 - Icons + color for accessibility (not color alone)
+
+## TUI Design Principles
+
+### Content Principles
+
+| Principle | Description |
+|-----------|-------------|
+| **No redundant headers** | User knows what command they ran - don't repeat it |
+| **Earn your pixels** | Every element must serve a purpose |
+| **Data in list, actions in footer** | Separate concerns - lists show data, footer shows available actions |
+| **Info panel for preview** | Show details of selected item when screen width allows |
+
+### Layout Rules
+
+- **Top-aligned content** - no vertical centering for lists
+- **Alt screen for interactive flows** - complex multi-step interactions use alternate screen buffer
+- **Inline for simple commands** - quick commands output directly to terminal
+- **Modals for quick actions** - confirmations and waiting states use centered overlay
+
+### Keyboard Conventions
+
+| Key | Action |
+|-----|--------|
+| `enter` | Confirm/select |
+| `space` | Toggle (for checkboxes) |
+| `esc` | Cancel/back (stays in app) |
+| `ctrl+c` | Kill application |
+| `↑↓` or `j/k` | Navigate list |
+| Single letters | Actions shown in footer (e.g., `a` add, `d` delete) |
+
+### Command Types
+
+| Type | Screen Mode | Example |
+|------|-------------|---------|
+| Management (interactive) | Alt screen | `urgent calendars` |
+| Setup (one-time) | Inline | `urgent setup` |
+| Output (machine-readable) | Inline | `urgent today`, `urgent next` |
+
+### Visual Hierarchy
+
+```
+┌─ Top bar (breadcrumbs when navigating hierarchy) ─────────────┐
+│                                                               │
+│  Content area (top-aligned)              │ Info panel        │
+│  - List items with selection indicator   │ (optional,        │
+│  - No decorative boxes                   │  shows preview)   │
+│                                          │                   │
+│                                                               │
+├─ Footer (actions with keyboard shortcuts) ────────────────────┤
+│  enter select  •  a add  •  d disconnect  •  esc exit        │
+└───────────────────────────────────────────────────────────────┘
+```
+
+### What NOT to Do
+
+- No emoji in UI elements (decorative, not functional)
+- No boxes around content (visual noise)
+- No centered lists (wastes space)
+- No redundant labels (let content speak)
+- No "Press q to exit" screens (auto-exit on completion)
 
 ### config
 
@@ -180,15 +238,17 @@ Application configuration (minimal, most data in Keychain).
 ### OAuth Authentication Flow
 
 ```
-1. User runs: urgent connect
-2. Command retrieves OAuth credentials from Keychain
-3. Auth manager starts local HTTP server on random port
-4. Browser opens to Google OAuth consent page
-5. User grants permission
-6. Google redirects to localhost:{PORT}/callback
-7. Manager exchanges auth code for tokens
-8. Tokens saved to Keychain with user's email as key
-9. Success screen displayed to user
+1. User runs: urgent calendars
+2. User presses 'a' to add account
+3. Modal appears with "Waiting for authorization" + OAuth URL
+4. Auth manager starts local HTTP server on random port
+5. Browser opens to Google OAuth consent page
+6. User grants permission
+7. Google redirects to localhost:{PORT}/callback
+8. Manager exchanges auth code for tokens
+9. Tokens saved to Keychain with user's email as key
+10. Modal closes, navigates to calendar selection for new account
+11. User selects calendars, saves, returns to account list
 ```
 
 ### Event Fetching Flow

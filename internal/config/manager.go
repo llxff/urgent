@@ -8,10 +8,33 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Reader provides read-only access to configuration.
+type Reader interface {
+	Load() (*Config, error)
+	GetEnabledCalendarIDs(email string) ([]string, error)
+}
+
+// Writer provides write access to configuration.
+type Writer interface {
+	SetEnabledCalendars(email string, selections []CalendarSelection) error
+	DeleteAccount(email string) error
+}
+
+// ReadWriter combines Reader and Writer interfaces.
+type ReadWriter interface {
+	Reader
+	Writer
+	Save(cfg *Config) error
+}
+
 // Manager handles configuration persistence with XDG Base Directory support.
+// It implements the ReadWriter interface.
 type Manager struct {
 	configPath string
 }
+
+// Verify Manager implements ReadWriter at compile time.
+var _ ReadWriter = (*Manager)(nil)
 
 // NewManager creates a new config manager.
 // It determines the config file path following XDG Base Directory specification.

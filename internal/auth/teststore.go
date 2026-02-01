@@ -10,9 +10,14 @@ import (
 //
 // All methods are safe for concurrent use.
 type TestStore struct {
-	tokens map[string]*oauth2.Token
-	mu     sync.RWMutex
+	tokens       map[string]*oauth2.Token
+	clientID     string
+	clientSecret string
+	mu           sync.RWMutex
 }
+
+// Verify TestStore implements Store at compile time.
+var _ Store = (*TestStore)(nil)
 
 // NewTestStore creates a new in-memory credential store for testing.
 func NewTestStore() *TestStore {
@@ -77,4 +82,27 @@ func (s *TestStore) ListAccounts() ([]string, error) {
 	}
 
 	return accounts, nil
+}
+
+// GetOAuthCredentials retrieves OAuth credentials from memory.
+func (s *TestStore) GetOAuthCredentials() (clientID, clientSecret string, err error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.clientID == "" || s.clientSecret == "" {
+		return "", "", ErrNotFound
+	}
+
+	return s.clientID, s.clientSecret, nil
+}
+
+// SaveOAuthCredentials stores OAuth credentials in memory.
+func (s *TestStore) SaveOAuthCredentials(clientID, clientSecret string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.clientID = clientID
+	s.clientSecret = clientSecret
+
+	return nil
 }

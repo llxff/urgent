@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-`urgent` is a beautiful TUI-based Google Calendar CLI built in Go that supports multiple accounts, secure credential storage, and automation-friendly output.
+`urgent` is a TUI-based Google Calendar CLI built in Go that supports multiple accounts, secure credential storage, and automation-friendly output.
 
 ## Quick Context
 
@@ -17,10 +17,10 @@
 
 ## Key Files to Understand
 
-1. **`.cursor/rules.md`** - Coding standards and patterns
+1. **`docs/STYLE.md`** - Coding standards and patterns
 2. **`docs/ARCHITECTURE.md`** - System architecture and design decisions
 3. **`docs/API.md`** - Internal API documentation
-4. **`docs/CONTRIBUTING.md`** - Development guidelines
+4. **`docs/adrs/`** - Architecture Decision Records (important decisions)
 
 ## Module Structure
 
@@ -132,15 +132,61 @@ task run -- setup  # Run command
 
 - **Godoc**: Every exported symbol must have documentation
 - **Examples**: Add examples for complex functions
-- **Architecture Decisions**: Document in docs/ARCHITECTURE.md
-- **API Changes**: Update docs/API.md
+- **ADRs**: Create ADRs for significant decisions (see above)
+- **Architecture**: Update `docs/ARCHITECTURE.md` for system changes
+- **API Changes**: Update `docs/API.md` for interface changes
 
 ## Getting Help
 
-- Check `.cursor/prompts.md` for common AI prompts
-- Read `docs/ARCHITECTURE.md` for design decisions
+- Read `docs/adrs/` for past architectural decisions
+- Read `docs/ARCHITECTURE.md` for system design
 - Look at existing tests for patterns
 - Follow patterns in similar modules
+
+## Architecture Decision Records (ADRs)
+
+**IMPORTANT**: AI agents must follow these ADR guidelines.
+
+### When Starting Work
+
+Always load existing ADRs to understand past decisions:
+```bash
+ls docs/adrs/
+```
+Read relevant ADRs before making changes to related areas.
+
+### When to Create ADRs
+
+Create a new ADR when making decisions about:
+- Storage mechanisms or data persistence
+- Authentication/security approaches
+- Testing strategies or frameworks
+- External service integrations
+- Significant architectural patterns
+- Technology or library choices
+
+### ADR Format
+
+Create files in `docs/adrs/` with name `YYYYMMDD_short_name.md`:
+
+```markdown
+# ADR: [Title]
+
+**Date:** YYYY-MM-DD
+**Status:** Accepted | Superseded | Deprecated
+
+## Context
+What motivated this decision?
+
+## Decision
+What was decided?
+
+## Consequences
+**Positive:** Benefits
+**Negative:** Trade-offs
+```
+
+After creating an ADR, update `docs/adrs/README.md` index.
 
 ## Critical Principles
 
@@ -149,6 +195,7 @@ task run -- setup  # Run command
 3. **Testability**: Interfaces for all external dependencies
 4. **Maintainability**: Clear code > clever code
 5. **AI-Friendly**: Clear structure, good documentation, consistent patterns
+6. **Document Decisions**: Create ADRs for significant architectural choices
 
 ## Configuration
 

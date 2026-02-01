@@ -1,35 +1,6 @@
-# Cursor Rules for urgent
+# Coding Standards for urgent
 
-These rules guide AI-assisted development for the urgent project.
-
-## Documentation Policy
-
-### Do NOT Create Summary Files
-
-This project maintains comprehensive documentation in:
-- Plan files (`.cursor/plans/`) - Detailed implementation plans
-- README.md - User-facing documentation
-- AGENTS.md - AI agent guide
-- docs/ARCHITECTURE.md - Design decisions
-- docs/API.md - Internal APIs
-- Git history - What changed
-
-**Never create:**
-- IMPLEMENTATION_SUMMARY.md
-- FEATURE_SUMMARY.md
-- CHANGES.md
-- Or similar summary/changelog files
-
-**Update existing documentation instead:**
-- If adding new features → update README.md
-- If changing architecture → update docs/ARCHITECTURE.md
-- If modifying APIs → update docs/API.md
-- If adding AI context → update AGENTS.md
-
-Summary files are redundant when:
-- Implementation follows the plan
-- Documentation is kept up-to-date
-- Git history is clear
+These standards guide development for the urgent project.
 
 ## Core Principles
 
@@ -44,12 +15,12 @@ Summary files are redundant when:
 ### Go Standards
 
 ```go
-// ✅ Good
+// Good
 func NewClient(ctx context.Context, email string, store auth.Store) (*Client, error) {
     // Clear parameter names, explicit dependencies
 }
 
-// ❌ Bad
+// Bad
 func NewClient(ctx context.Context, e string, s interface{}) (*Client, error) {
     // Vague names, interface{} instead of specific type
 }
@@ -58,23 +29,23 @@ func NewClient(ctx context.Context, e string, s interface{}) (*Client, error) {
 ### Error Handling
 
 ```go
-// ✅ Good - Wrap with context
+// Good - Wrap with context
 return nil, fmt.Errorf("failed to fetch events: %w", err)
 
-// ❌ Bad - Lose error context
+// Bad - Lose error context
 return nil, err
 ```
 
 ### Interface Design
 
 ```go
-// ✅ Good - Small, focused interface
+// Good - Small, focused interface
 type Store interface {
     SaveToken(email string, token *oauth2.Token) error
     GetToken(email string) (*oauth2.Token, error)
 }
 
-// ❌ Bad - Large, unfocused interface
+// Bad - Large, unfocused interface
 type Store interface {
     SaveToken(email string, token *oauth2.Token) error
     GetToken(email string) (*oauth2.Token, error)
@@ -89,7 +60,7 @@ type Store interface {
 ### Test Implementations Over Mocks
 
 ```go
-// ✅ Good - Real in-memory implementation
+// Good - Real in-memory implementation
 type TestStore struct {
     tokens map[string]*oauth2.Token
 }
@@ -99,7 +70,7 @@ func (s *TestStore) SaveToken(email string, token *oauth2.Token) error {
     return nil
 }
 
-// ❌ Bad - Mock framework
+// Bad - Mock framework
 mockStore := new(MockStore)
 mockStore.On("SaveToken", "user@example.com", mock.Anything).Return(nil)
 ```
@@ -107,7 +78,7 @@ mockStore.On("SaveToken", "user@example.com", mock.Anything).Return(nil)
 ### Table-Driven Tests
 
 ```go
-// ✅ Good
+// Good
 func TestGetColorHex(t *testing.T) {
     tests := []struct {
         name    string
@@ -118,7 +89,7 @@ func TestGetColorHex(t *testing.T) {
         {"invalid color", "999", "4285f4"},
         {"empty string", "", "4285f4"},
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             got := getColorHex(tt.colorID)
@@ -145,10 +116,10 @@ func TestGetColorHex(t *testing.T) {
 - Two Keychain services: `com.urgent.cli` (tokens), `com.urgent.cli.oauth` (client creds)
 
 ```go
-// ✅ Good - Automatic refresh
+// Good - Automatic refresh
 client := oauth2.NewClient(ctx, oauth2.ReuseTokenSource(nil, tokenSource))
 
-// ❌ Bad - Manual refresh logic scattered
+// Bad - Manual refresh logic scattered
 if token.Expiry.Before(time.Now()) {
     // refresh token...
 }
@@ -162,10 +133,10 @@ if token.Expiry.Before(time.Now()) {
 - Graceful degradation if calendar list fails
 
 ```go
-// ✅ Good - Optional filtering
+// Good - Optional filtering
 func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time, calendarIDs []string) ([]*Event, error)
 
-// ❌ Bad - Always fetches all calendars
+// Bad - Always fetches all calendars
 func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time) ([]*Event, error)
 ```
 
@@ -177,12 +148,12 @@ func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time) ([]*
 - No concurrent access protection needed (CLI is sequential)
 
 ```go
-// ✅ Good - Atomic write
+// Good - Atomic write
 tmpFile := configPath + ".tmp"
 ioutil.WriteFile(tmpFile, data, 0644)
 os.Rename(tmpFile, configPath)
 
-// ❌ Bad - Direct write (can corrupt on interrupt)
+// Bad - Direct write (can corrupt on interrupt)
 ioutil.WriteFile(configPath, data, 0644)
 ```
 
@@ -201,13 +172,13 @@ ioutil.WriteFile(configPath, data, 0644)
 - Loading states with spinner for async operations
 
 ```go
-// ✅ Good - Adaptive color
+// Good - Adaptive color
 var PrimaryColor = lipgloss.AdaptiveColor{
     Light: "63",  // ANSI blue
     Dark:  "63",  // ANSI blue
 }
 
-// ❌ Bad - Hardcoded color
+// Bad - Hardcoded color
 style := lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF"))
 ```
 
@@ -232,14 +203,14 @@ style := lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF"))
 3. **TUI Flow Pattern**
    ```go
    type commandStage int
-   
+
    const (
        stageInitializing commandStage = iota
        stageLoading
        stageSuccess
        stageError
    )
-   
+
    type commandModel struct {
        stage commandStage
        err   error
@@ -256,13 +227,13 @@ style := lipgloss.NewStyle().Foreground(lipgloss.Color("#0000FF"))
 ### Godoc
 
 ```go
-// ✅ Good
+// Good
 // GetEvents fetches calendar events within the specified time range.
 // If calendarIDs is nil or empty, events from all calendars are fetched.
 // Returns an error if the API request fails or token refresh fails.
 func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time, calendarIDs []string) ([]*Event, error)
 
-// ❌ Bad
+// Bad
 // GetEvents gets events
 func (c *Client) GetEvents(ctx context.Context, timeMin, timeMax time.Time, calendarIDs []string) ([]*Event, error)
 ```
@@ -274,25 +245,17 @@ Document in `docs/ARCHITECTURE.md`:
 - Trade-offs considered
 - Examples of the pattern
 
-### API Changes
-
-Update `docs/API.md`:
-- Interface signatures
-- Parameter descriptions
-- Return values and errors
-- Usage examples
-
 ## Git Commit Messages
 
 ```
-# ✅ Good
+# Good
 feat(calendar): add calendar ID filtering to GetEvents
 
 Allows filtering events by specific calendar IDs instead of fetching
 all calendars. Maintains backward compatibility by treating nil/empty
 as "fetch all".
 
-# ❌ Bad
+# Bad
 update calendar
 ```
 
@@ -304,23 +267,23 @@ Types: feat, fix, docs, test, refactor, chore
 
 ### 1. Hardcoded Colors
 ```go
-// ❌ Bad
+// Bad
 style := lipgloss.NewStyle().Foreground(lipgloss.Color("blue"))
 
-// ✅ Good
+// Good
 style := lipgloss.NewStyle().Foreground(PrimaryColor)
 ```
 
 ### 2. Global State
 ```go
-// ❌ Bad
+// Bad
 var globalStore Store
 
 func DoSomething() {
     globalStore.SaveToken(...)
 }
 
-// ✅ Good
+// Good
 func DoSomething(store Store) {
     store.SaveToken(...)
 }
@@ -328,12 +291,12 @@ func DoSomething(store Store) {
 
 ### 3. Ignoring Context
 ```go
-// ❌ Bad
+// Bad
 func FetchData() error {
     resp, err := http.Get(url)
 }
 
-// ✅ Good
+// Good
 func FetchData(ctx context.Context) error {
     req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
     resp, err := client.Do(req)
@@ -342,12 +305,12 @@ func FetchData(ctx context.Context) error {
 
 ### 4. Not Using Interfaces
 ```go
-// ❌ Bad
+// Bad
 func ProcessEvents(client *calendar.Client) error {
     // Hard to test, tightly coupled
 }
 
-// ✅ Good
+// Good
 func ProcessEvents(provider calendar.CalendarProvider) error {
     // Easy to test with FixtureClient
 }
@@ -355,27 +318,12 @@ func ProcessEvents(provider calendar.CalendarProvider) error {
 
 ### 5. Verbose Error Messages
 ```go
-// ❌ Bad
+// Bad
 return fmt.Errorf("Error: Failed to save token for user %s to keychain: %v", email, err)
 
-// ✅ Good
+// Good
 return fmt.Errorf("failed to save token: %w", err)
 ```
-
-## AI Assistance Guidelines
-
-### When Asking for Changes
-
-1. **Be Specific**: "Add calendar filtering to GetEvents" not "make it better"
-2. **Provide Context**: Mention related files and interfaces
-3. **Reference Standards**: Point to similar code or patterns
-
-### When Reviewing AI Code
-
-1. **Check Test Coverage**: All new code should have tests
-2. **Verify Interfaces**: Dependencies should be injected, not global
-3. **Review Error Handling**: Errors should be wrapped with context
-4. **Confirm Documentation**: Godoc for all exported symbols
 
 ## Quick Reference
 
@@ -407,11 +355,11 @@ open coverage.html     # View in browser
 ## Success Criteria
 
 Code is ready to merge when:
-- ✅ All tests pass
-- ✅ Coverage meets targets (95%+ for business logic)
-- ✅ All exported symbols have Godoc
-- ✅ No hardcoded colors in TUI
-- ✅ Dependencies injected via interfaces
-- ✅ Error messages include context
-- ✅ README and docs updated
-- ✅ `task dev` runs clean (lint + test)
+- All tests pass
+- Coverage meets targets (95%+ for business logic)
+- All exported symbols have Godoc
+- No hardcoded colors in TUI
+- Dependencies injected via interfaces
+- Error messages include context
+- README and docs updated
+- `task dev` runs clean (lint + test)

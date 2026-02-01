@@ -1,158 +1,144 @@
-# urgent - Beautiful Google Calendar CLI
+# urgent - Google Calendar CLI for Automation
 
-A powerful command-line interface for Google Calendar with a beautiful terminal UI, multiple account support, and automation-friendly JSON output.
+**Get your Google Calendar events from the command line.** Use them in scripts, status bars, notifications, or anywhere you need calendar data.
+
+## Why urgent?
+
+Your calendar data is locked in Google Calendar's web UI. **urgent** frees it:
+
+- **Build custom notifications** - Get alerts 10 minutes before meetings, not Google's default
+- **Status bar integration** - Show your next meeting in Polybar, i3status, or tmux
+- **Script your workflow** - Block focus time when you have meetings, auto-set Slack status
+- **Aggregate multiple accounts** - See work + personal calendars in one place
+- **Pipe to anything** - JSON output works with jq, scripts, webhooks, whatever
+
+## Quick Example
+
+```bash
+# What's my next meeting?
+$ urgent next --within 60 -o json | jq '.event.summary'
+"Team Standup"
+
+# Am I free for the next hour?
+$ urgent next --within 60 && echo "Meeting soon!" || echo "You're free"
+
+# Today's schedule
+$ urgent today -o json | jq -r '.events[] | "\(.start[11:16]) \(.summary)"'
+09:00 Team Standup
+11:00 1:1 with Manager
+14:00 Sprint Planning
+```
 
 ## Features
 
-✨ **Beautiful Terminal UI** - Adaptive colors, smooth animations, intuitive navigation  
-🔐 **Secure** - All credentials stored in macOS Keychain  
-👥 **Multiple Accounts** - Manage multiple Google accounts simultaneously  
-🤖 **Automation-Friendly** - JSON output for scripts and integrations  
-⚡ **Fast** - Parallel event fetching, automatic token refresh  
-🎨 **Color-Coded** - Events styled by calendar colors  
+- **JSON output** for scripting and automation
+- **Multiple Google accounts** in one place
+- **Calendar filtering** - enable only the calendars you care about
+- **Secure storage** - credentials in macOS Keychain, never in files
+- **Fast** - parallel fetching, automatic token refresh
 
 ## Installation
 
-### From Source
-
 ```bash
-git clone <repository-url>
-cd urgent
-task build
+# From source
+git clone https://github.com/llxff/urgent.git
+cd urgent && task build
 sudo mv bin/urgent /usr/local/bin/
+
+# Or with Go
+go install github.com/llxff/urgent@latest
 ```
 
-### Using Go
+## Setup (One-time)
 
-```bash
-go install github.com/yourusername/urgent@latest
-```
-
-## Quick Start
-
-### 1. Setup OAuth Credentials
-
-First, create OAuth credentials in Google Cloud Console:
+### 1. Create Google OAuth Credentials
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable Google Calendar API
-4. Create OAuth 2.0 credentials (Desktop app type)
-5. Configure authorized redirect URIs: `http://localhost`
+2. Create a project and enable Google Calendar API
+3. Create OAuth 2.0 credentials (Desktop app)
+4. Add redirect URI: `http://localhost`
 
-Then run setup:
+### 2. Store Credentials
 
 ```bash
 urgent setup
+# Enter Client ID and Client Secret when prompted
 ```
 
-Enter your Client ID and Client Secret when prompted. They'll be stored securely in Keychain.
-
-### 2. Connect Your Google Account
+### 3. Connect Your Account
 
 ```bash
 urgent connect
-```
-
-A browser window will open for you to authorize the app. Once authorized, you'll be prompted to select which calendars to enable. Your selections are stored securely.
-
-### 3. Manage Calendar Selection
-
-```bash
-# Select calendars for an account
-urgent calendars
-
-# Select calendars for specific account
-urgent calendars --account user@example.com
-
-# List all calendars and their enabled/disabled status
-urgent calendars --list
-```
-
-### 4. View Today's Events
-
-```bash
-# Show all events for today
-urgent today
-
-# Show only remaining events
-urgent today --remaining
-
-# Get JSON output for scripting
-urgent today -o json
-```
-
-### 5. Check Next Event
-
-```bash
-# Show next event if it's within 30 minutes
-urgent next --within 30
-
-# JSON output
-urgent next --within 30 -o json
-```
-
-### 6. Disconnect an Account
-
-```bash
-urgent disconnect
+# Browser opens for authorization, then select calendars
 ```
 
 ## Commands
 
-### `urgent setup`
+| Command | Description |
+|---------|-------------|
+| `urgent today` | Today's events |
+| `urgent today --remaining` | Only future events today |
+| `urgent today -o json` | JSON output |
+| `urgent next --within 30` | Next event within 30 minutes |
+| `urgent calendars` | Manage which calendars to show |
+| `urgent connect` | Add a Google account |
+| `urgent disconnect` | Remove an account |
 
-Store OAuth client credentials in Keychain (one-time setup).
+## Automation Examples
 
-```bash
-urgent setup
-```
-
-### `urgent connect`
-
-Connect a Google account with beautiful TUI flow. After OAuth authorization, you'll select which calendars to enable.
-
-```bash
-urgent connect
-```
-
-### `urgent calendars`
-
-Manage calendar selection for your accounts.
+### Desktop Notifications (cron)
 
 ```bash
-# Select calendars (interactive)
-urgent calendars
-
-# Select calendars for specific account
-urgent calendars --account user@example.com
-
-# List all calendars and their enabled/disabled status
-urgent calendars --list
+# Every 5 min, notify if meeting in 10 min
+*/5 * * * * urgent next --within 10 -o json | jq -r 'select(.hasEvent) | "Meeting: \(.event.summary) in \(.event.minutesUntil)min"' | xargs -I {} terminal-notifier -message "{}"
 ```
 
-**List Output:**
+### Status Bar (Polybar)
+
+```ini
+[module/calendar]
+type = custom/script
+exec = urgent next --within 60 -o json | jq -r 'if .hasEvent then "[\(.event.minutesUntil)m] \(.event.summary)" else "" end'
+interval = 60
 ```
-user@example.com:
-  ✓ primary (user@example.com)
-  ✓ work@group.calendar.google.com (Work Calendar)
-    personal@example.com (Personal) [disabled]
-```
 
-You can change calendar selection at any time. Disabled calendars won't show events in `urgent today` or `urgent next`.
-
-### `urgent today`
-
-Show today's calendar events from enabled calendars.
+### Slack Status Script
 
 ```bash
-urgent today                    # All events (TUI table)
-urgent today --remaining        # Only remaining events
-urgent today -o json            # JSON output
-urgent today --remaining -o json
+#!/bin/bash
+EVENT=$(urgent next --within 5 -o json)
+if echo "$EVENT" | jq -e '.hasEvent' > /dev/null; then
+  SUMMARY=$(echo "$EVENT" | jq -r '.event.summary')
+  curl -X POST "https://slack.com/api/users.profile.set" \
+    -H "Authorization: Bearer $SLACK_TOKEN" \
+    -d "{\"profile\":{\"status_text\":\"In: $SUMMARY\",\"status_emoji\":\":calendar:\"}}"
+fi
 ```
 
-**JSON Output:**
+### tmux Status Line
+
+```bash
+# In .tmux.conf
+set -g status-right '#(urgent next --within 30 -o json | jq -r "if .hasEvent then .event.summary else \"\" end")'
+```
+
+### Block Distractions During Meetings
+
+```bash
+#!/bin/bash
+# Run every minute via cron
+if urgent next --within 0 -o json | jq -e '.hasEvent' > /dev/null; then
+  # Currently in a meeting - block distracting sites
+  sudo cp /etc/hosts.blocked /etc/hosts
+else
+  sudo cp /etc/hosts.normal /etc/hosts
+fi
+```
+
+## JSON Output Format
+
+### `urgent today -o json`
+
 ```json
 {
   "events": [
@@ -163,8 +149,7 @@ urgent today --remaining -o json
       "location": "Zoom",
       "calendar": "Work",
       "account": "user@gmail.com",
-      "colorHex": "ffff00",
-      "status": "upcoming"
+      "colorHex": "4285f4"
     }
   ],
   "count": 1,
@@ -172,223 +157,60 @@ urgent today --remaining -o json
 }
 ```
 
-### `urgent next`
+### `urgent next --within 30 -o json`
 
-Show the next event if it's within N minutes.
-
-```bash
-urgent next --within 30         # Check next event within 30 min
-urgent next --within 10 -o json # JSON output
-```
-
-**JSON Output:**
 ```json
 {
   "hasEvent": true,
+  "minutesUntil": 15,
   "event": {
-    "summary": "Meeting",
-    "start": "2025-12-25T15:00:00-08:00",
-    "end": "2025-12-25T16:00:00-08:00",
-    "minutesUntil": 15,
-    "calendar": "Work",
-    "account": "user@gmail.com"
+    "summary": "1:1 with Manager",
+    "start": "2025-12-25T14:00:00-08:00",
+    "end": "2025-12-25T14:30:00-08:00",
+    "calendar": "Work"
   }
 }
 ```
 
-Exit code 0 if event found, 1 if no event.
-
-### `urgent disconnect`
-
-Disconnect a Google account.
-
-```bash
-urgent disconnect                         # Interactive selection
-urgent disconnect --account user@gmail.com # Direct disconnect
-```
-
-## Automation Examples
-
-### Cron Job for Notifications
-
-Check for upcoming events every 5 minutes:
-
-```bash
-*/5 * * * * /usr/local/bin/urgent next --within 10 -o json | jq -r 'select(.hasEvent) | "Event: \(.event.summary) in \(.event.minutesUntil) minutes"' | terminal-notifier
-```
-
-### Status Bar Integration (Polybar)
-
-```ini
-[module/urgent]
-type = custom/script
-exec = urgent next --within 60 -o json | jq -r 'if .hasEvent then "\(.event.summary) (\(.event.minutesUntil)min)" else "" end'
-interval = 60
-```
-
-### Alfred Workflow
-
-```bash
-#!/bin/bash
-# Show today's events in Alfred
-urgent today -o json | jq -r '.events[] | "\(.start) - \(.summary)"'
-```
+Exit code: `0` if event found, `1` if no event (useful for conditionals).
 
 ## Configuration
 
-### Keychain Storage
+Calendar selections stored in `~/.config/urgent/config.yaml`:
 
-All sensitive data is stored in macOS Keychain:
-- **OAuth client credentials**: Service `com.urgent.cli.oauth`
-- **User tokens**: Service `com.urgent.cli`, account `{email}`
-
-### Calendar Preferences
-
-Calendar selections are stored in:
-- **Location**: `~/.config/urgent/config.yaml`
-- **Format**: YAML with calendar IDs and names
-
-**Example config:**
 ```yaml
 accounts:
   user@example.com:
-    email: user@example.com
     enabled_calendars:
       - id: primary
-        name: user@example.com
+        name: Main Calendar
       - id: work@group.calendar.google.com
-        name: Work Calendar
+        name: Work
 ```
 
-The config file is human-readable and can be edited manually, though using `urgent calendars` is recommended.
-
-### XDG Base Directory Support
-
-Config location follows XDG Base Directory specification:
-1. `$XDG_CONFIG_HOME/urgent/config.yaml`
-2. `~/.config/urgent/config.yaml` (default)
-
-To use a custom location:
-```bash
-export XDG_CONFIG_HOME=/custom/path
-```
+Credentials stored in macOS Keychain (never in files).
 
 ## Development
 
-### Prerequisites
-
-- Go 1.25+
-- Task (taskfile.dev)
-- golangci-lint
-- macOS
-
-### Setup
-
 ```bash
-task install    # Install dependencies
-task setup      # Install development tools
+task dev      # Lint + test (before commit)
+task build    # Build binary
+task test     # Run tests with coverage
 ```
 
-### Common Tasks
-
-```bash
-task            # List all tasks
-task build      # Build binary
-task test       # Run tests with coverage
-task lint       # Run linter with auto-fix
-task dev        # Pre-commit check (lint + test)
-task run -- today  # Run command
-```
-
-### Running Tests
-
-```bash
-task test               # All tests with coverage
-go test ./internal/...  # Specific package
-go test -v -run TestName # Specific test
-```
-
-### Project Structure
-
-```
-cmd/              - Cobra commands
-internal/
-  auth/           - OAuth2 & Keychain storage
-  calendar/       - Google Calendar API client
-  output/         - JSON & table formatters
-  tui/            - Terminal UI components
-  config/         - Configuration
-test/
-  integration/    - Integration tests
-  fixtures/       - Test data
-docs/             - Documentation
-```
-
-## Documentation
-
-- **[AGENTS.md](AGENTS.md)** - AI agent guide (start here)
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
-- **[docs/API.md](docs/API.md)** - Internal API documentation
-- **[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)** - Development guidelines
-- **[.cursor/rules.md](.cursor/rules.md)** - Coding standards
+See [AGENTS.md](AGENTS.md) for architecture and development guide.
 
 ## Troubleshooting
 
-### "Keychain access denied"
+| Issue | Solution |
+|-------|----------|
+| Keychain access denied | Grant Terminal access in System Preferences > Privacy |
+| OAuth client not found | Run `urgent setup` |
+| No accounts connected | Run `urgent connect` |
+| Token expired | Tokens auto-refresh; if failing, `urgent disconnect` then `urgent connect` |
 
-Grant Terminal/iTerm2 access to Keychain in System Preferences → Privacy & Security.
+## Links
 
-### "OAuth client not found"
-
-Run `urgent setup` to store OAuth credentials.
-
-### "No accounts connected"
-
-Run `urgent connect` to authorize a Google account.
-
-### "Token expired"
-
-Tokens are automatically refreshed. If this fails, disconnect and reconnect:
-
-```bash
-urgent disconnect --account user@gmail.com
-urgent connect
-```
-
-## Security
-
-- All credentials stored in macOS Keychain
-- OAuth2 with automatic token refresh
-- State parameter prevents CSRF attacks
-- No credentials in logs or files
-- Local OAuth server on random port
-
-## Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](docs/CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Run `task dev` to verify
-5. Submit a pull request
-
-## License
-
-[Your License Here]
-
-## Acknowledgments
-
-- [Charm](https://charm.sh/) - Beautiful TUI libraries
-- [Cobra](https://github.com/spf13/cobra) - CLI framework
-- [Google Calendar API](https://developers.google.com/calendar) - Calendar integration
-
-## Support
-
-- 🐛 **Bug Reports**: [GitHub Issues](your-repo-url/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](your-repo-url/discussions)
-- 📖 **Documentation**: [docs/](docs/)
-
----
-
-Made with ❤️ and ☕ by [Your Name]
+- [AGENTS.md](AGENTS.md) - Development guide
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - Technical architecture
+- [GitHub Issues](https://github.com/llxff/urgent/issues) - Bug reports
